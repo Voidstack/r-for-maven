@@ -3,95 +3,57 @@ package com.enosistudio;
 import org.jetbrains.annotations.Contract;
 
 import java.io.*;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 
 /**
- * Represents a resource file with utility methods for reading and manipulating resources.
- * Resource files are read-only files bundled within your application (especially when packaged in JARs)
- * and should never be modified at runtime.
- *
- * <p><b>JAR vs Filesystem compatibility:</b></p>
- * <ul>
- *   <li><b>Always work</b> (JAR + filesystem): {@link #openStream()}, {@link #readContent()},
- *       {@link #openBufferedReader()}, {@link #exists()}, {@link #size()}</li>
- *   <li><b>Create temp files for JAR</b>: {@link #toFile()}, {@link #toAbsolutePath()}</li>
- *   <li><b>Metadata only</b>: {@link #getFileName()}, {@link #getExtension()},
- *       {@link #getBaseName()}, etc.</li>
- * </ul>
+ * Simple wrapper for classpath resources.
+ * Handles both JAR and filesystem resources automatically.
  */
+@SuppressWarnings("unused")
 public final class RFile {
-    private final String resourcePath;
-    private final String fileName;
+    private final String path;
+    private final ClassLoader loader;
 
     /**
-     * Creates a new RFile instance for the specified resource path.
+     * Creates a new instance for the specified resource.
      *
-     * @param resourcePath the resource path (leading slash will be normalized away)
-     * @throws IllegalArgumentException if resourcePath is null or empty
+     * @param resourcePath the resource path (leading slash optional)
+     * @throws IllegalArgumentException if path is null or empty
      */
     public RFile(String resourcePath) {
         if (resourcePath == null || resourcePath.trim().isEmpty()) {
             throw new IllegalArgumentException("Resource path cannot be null or empty");
         }
 
-        // Normalize resource path (remove leading slash if present)
-        this.resourcePath = resourcePath.startsWith("/") ? resourcePath.substring(1) : resourcePath;
-        int lastSlash = this.resourcePath.lastIndexOf('/');
-        this.fileName = lastSlash >= 0 ? this.resourcePath.substring(lastSlash + 1) : this.resourcePath;
+        this.path = resourcePath.startsWith("/") ? resourcePath.substring(1) : resourcePath;
+        this.loader = getClass().getClassLoader();
     }
 
-    /**
-     * Returns the resource path as string.
-     *
-     * @return the normalized resource path without leading slash
-     */
-    @Override
-    public String toString() {
-        return resourcePath;
-    }
+    // ========== Content Reading ==========
 
     /**
-     * Gets the absolute URL from the classpath root.
+     * Opens an InputStream to the resource.
      *
-     * @return the absolute resource URL, or {@code null} if resource doesn't exist
-     * <p><b>Note:</b> Works for both JAR and filesystem resources.</p>
-     */
-    @Contract(pure = true)
-    public URL getAbsoluteURL() {
-        return getClass().getClassLoader().getResource(resourcePath);
-    }
-
-    /**
-     * Opens an InputStream for this resource.
-     *
-     * @return a new InputStream for reading the resource
-     * @throws IOException if the resource cannot be found or opened
-     * <p><b>Note:</b> Works for both JAR and filesystem resources.</p>
+     * @return a new stream
+     * @throws IOException if the resource does not exist
      */
     @Contract(pure = true)
     public InputStream openStream() throws IOException {
-        InputStream stream = getClass().getClassLoader().getResourceAsStream(resourcePath);
+        InputStream stream = loader.getResourceAsStream(path);
         if (stream == null) {
-            throw new IOException("Resource not found: " + resourcePath);
+            throw new IOException("Resource not found: " + path);
         }
         return stream;
     }
 
     /**
-     * Reads the entire content of the resource as a UTF-8 string.
+     * Reads the entire content as UTF-8.
      *
-     * @return the complete resource content as a UTF-8 string
-     * @throws IOException if the resource cannot be read
-     * <p><b>Note:</b> Consider using {@link #openBufferedReader()} for large files.</p>
-     * @see #readContent(Charset)
+     * @return the complete content
+     * @throws IOException if read error occurs
      */
     @Contract(pure = true)
     public String readContent() throws IOException {
@@ -99,14 +61,11 @@ public final class RFile {
     }
 
     /**
-     * Reads the entire content of the resource as a string using the specified charset.
+     * Reads the entire content with specified encoding.
      *
-     * @param charset the charset to use for decoding the resource content
-     * @return the complete resource content as a string
-     * @throws IOException if the resource cannot be read
-     * @throws NullPointerException if charset is null
-     * <p><b>Note:</b> Consider using {@link #openBufferedReader(Charset)} for large files.</p>
-     * @see #readContent()
+     * @param charset the encoding to use
+     * @return the complete content
+     * @throws IOException if read error occurs
      */
     @Contract(pure = true)
     public String readContent(Charset charset) throws IOException {
@@ -119,11 +78,10 @@ public final class RFile {
     }
 
     /**
-     * Opens a BufferedReader for this resource using UTF-8 charset.
+     * Opens a BufferedReader using UTF-8.
      *
-     * @return a new BufferedReader for reading the resource
-     * @throws IOException if the resource cannot be opened
-     * @see #openBufferedReader(Charset)
+     * @return a new reader
+     * @throws IOException if open error occurs
      */
     @Contract(pure = true)
     public BufferedReader openBufferedReader() throws IOException {
@@ -131,220 +89,158 @@ public final class RFile {
     }
 
     /**
-     * Opens a BufferedReader for this resource using the specified charset.
+     * Opens a BufferedReader with specified encoding.
      *
-     * @param charset the charset to use for decoding
-     * @return a new BufferedReader for reading the resource
-     * @throws IOException if the resource cannot be opened
-     * @throws NullPointerException if charset is null
-     * @see #openBufferedReader()
+     * @param charset the encoding to use
+     * @return a new reader
+     * @throws IOException if open error occurs
      */
     @Contract(pure = true)
     public BufferedReader openBufferedReader(Charset charset) throws IOException {
         if (charset == null) {
             throw new NullPointerException("Charset cannot be null");
         }
-        InputStream in = openStream();
-        return new BufferedReader(new InputStreamReader(in, charset));
+        return new BufferedReader(new InputStreamReader(openStream(), charset));
     }
 
+    // ========== Metadata ==========
+
     /**
-     * Converts the resource to a File object from his absolute path.
-     * If the resource is inside a JAR, it will be copied to a temporary file.
+     * Returns the absolute URL of the resource.
      *
-     * @return a File object representing this resource
-     * @throws IOException if the resource cannot be accessed or copied
-     * <p><b>Note:</b> JAR resources are extracted to temporary files that are deleted on JVM exit.</p>
-     * @see #toAbsolutePath()
+     * @return the URL, or null if the resource does not exist
      */
     @Contract(pure = true)
-    public File toFile() throws IOException {
-        return createTemporaryFileIfNeeded().toFile();
+    public URL getURL() {
+        return loader.getResource(path);
     }
 
     /**
-     * Converts the resource to a Path object.
-     * If the resource is inside a JAR, it will be copied to a temporary file.
+     * Returns the external form of the URL.
      *
-     * @return a Path object representing this resource
-     * @throws IOException if the resource cannot be accessed or copied
-     * <p><b>Note:</b> JAR resources are extracted to temporary files that are deleted on JVM exit.</p>
-     * @see #toFile()
+     * @return the URL as string
      */
     @Contract(pure = true)
-    public Path toAbsolutePath() throws IOException {
-        return createTemporaryFileIfNeeded();
-    }
-
-    /**
-     * Creates a temporary file if the resource is in a JAR, otherwise returns the direct path.
-     *
-     * @return the path to the resource (direct or temporary file)
-     * @throws IOException if the resource cannot be accessed or copied
-     */
-    private Path createTemporaryFileIfNeeded() throws IOException {
-        URL url = getAbsoluteURL();
-        if (url == null) {
-            throw new IOException("Resource not found: " + resourcePath);
-        }
-
-        // Resource is on filesystem - return direct path
-        if ("file".equals(url.getProtocol())) {
-            try {
-                return Paths.get(url.toURI());
-            } catch (URISyntaxException e) {
-                throw new IOException("Invalid resource URL: " + url, e);
-            }
-        }
-
-        // Resource is in JAR - copy to temporary file
-        return copyToTemporaryFile();
-    }
-
-    /**
-     * Copies the resource to a temporary file.
-     *
-     * @return the path to the temporary file
-     * @throws IOException if the resource cannot be copied
-     */
-    private Path copyToTemporaryFile() throws IOException {
-        String prefix = "res-";
-        String suffix = "-" + fileName;
-
-        try (InputStream in = openStream()) {
-            Path tempFile = Files.createTempFile(prefix, suffix);
-            tempFile.toFile().deleteOnExit();
-            Files.copy(in, tempFile, StandardCopyOption.REPLACE_EXISTING);
-            return tempFile;
-        }
-    }
-
-    /**
-     * Gets just the filename part of the resource.
-     *
-     * @return the filename (last segment after the last slash)
-     * @see #getBaseName()
-     * @see #getExtension()
-     */
-    @Contract(pure = true)
-    public String getFileName() {
-        return fileName;
-    }
-
-    /**
-     * Gets the filename without extension.
-     *
-     * @return the base filename without extension
-     * @see #getFileName()
-     * @see #getExtension()
-     */
-    @Contract(pure = true)
-    public String getBaseName() {
-        int lastDot = fileName.lastIndexOf('.');
-        return lastDot >= 0 ? fileName.substring(0, lastDot) : fileName;
-    }
-
-    /**
-     * Gets the file extension (without the dot).
-     *
-     * @return the file extension, or empty string if no extension
-     * @see #getFileName()
-     * @see #getBaseName()
-     */
-    @Contract(pure = true)
-    public String getExtension() {
-        int lastDot = fileName.lastIndexOf('.');
-        return lastDot >= 0 ? fileName.substring(lastDot + 1) : "";
-    }
-
-    /**
-     * Guesses the MIME type of the resource based on its content.
-     *
-     * @return the MIME type, or {@code null} if it cannot be determined
-     * @throws IOException if an I/O error occurs while reading the resource
-     * <p><b>Note:</b> Works for both JAR and filesystem resources. Consider using a library
-     *          like Apache Tika for more accurate detection.</p>
-     */
-    @Contract(pure = true)
-    public String getMimeType() throws IOException {
-        return URLConnection.guessContentTypeFromStream(openStream());
-    }
-
-    /**
-     * Gets the resource path.
-     *
-     * @return the normalized resource path without leading slash
-     * @see #getResourcePathWithSlash()
-     */
-    @Contract(pure = true)
-    public String getResourcePath() {
-        return resourcePath;
-    }
-
-    /**
-     * Gets the resource path with a leading slash.
-     *
-     * @return the resource path prefixed with a slash
-     * @see #getResourcePath()
-     */
-    @Contract(pure = true)
-    public String getResourcePathWithSlash() {
-        return "/" + resourcePath;
-    }
-
-    /**
-     * Gets the parent directory path of this resource.
-     *
-     * @return the parent directory path, or empty string if resource is at root
-     */
-    @Contract(pure = true)
-    public String getParentResourcePath() {
-        int lastSlash = resourcePath.lastIndexOf('/');
-        return lastSlash >= 0 ? resourcePath.substring(0, lastSlash) : "";
+    public String toExternalForm() {
+        return getURL().toExternalForm();
     }
 
     /**
      * Checks if the resource exists.
      *
-     * @return {@code true} if the resource exists, {@code false} otherwise
-     * <p><b>Note:</b> Works for both JAR and filesystem resources.</p>
+     * @return true if it exists
      */
     @Contract(pure = true)
     public boolean exists() {
-        return getAbsoluteURL() != null;
+        return getURL() != null;
     }
 
     /**
-     * Gets the size of the resource in bytes.
+     * Returns the size in bytes.
      *
-     * @return the size in bytes, or {@code -1} if resource doesn't exist
-     * @throws IOException if an I/O error occurs while calculating the size
-     * <p><b>Note:</b> Works for both JAR and filesystem resources.</p>
+     * @return the size, or -1 if the resource does not exist
+     * @throws IOException if calculation error occurs
      */
     @Contract(pure = true)
     public long size() throws IOException {
-        URL url = getAbsoluteURL();
-        if (url == null) {
-            return -1;
-        }
+        if (!exists()) return -1;
 
-        if ("file".equals(url.getProtocol())) {
-            try {
-                return Files.size(Paths.get(url.toURI()));
-            } catch (URISyntaxException e) {
-                // Fallback to stream-based size calculation
-            }
-        }
-
-        // For JAR resources, we need to read the stream to get the size
         try (InputStream in = openStream()) {
             long size = 0;
             byte[] buffer = new byte[8192];
-            int bytesRead;
-            while ((bytesRead = in.read(buffer)) != -1) {
-                size += bytesRead;
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                size += read;
             }
             return size;
         }
+    }
+
+    /**
+     * Guesses the MIME type from content.
+     *
+     * @return the MIME type, or null if indeterminable
+     * @throws IOException if read error occurs
+     */
+    @Contract(pure = true)
+    public String getMimeType() throws IOException {
+        try (InputStream in = openStream()) {
+            return URLConnection.guessContentTypeFromStream(in);
+        }
+    }
+
+    // ========== Name Parsing ==========
+
+    /**
+     * Returns the filename (last part of the path).
+     *
+     * @return the filename
+     */
+    @Contract(pure = true)
+    public String getFileName() {
+        int lastSlash = path.lastIndexOf('/');
+        return lastSlash >= 0 ? path.substring(lastSlash + 1) : path;
+    }
+
+    /**
+     * Returns the filename without extension.
+     *
+     * @return the base name
+     */
+    @Contract(pure = true)
+    public String getBaseName() {
+        String fileName = getFileName();
+        int dot = fileName.lastIndexOf('.');
+        return dot >= 0 ? fileName.substring(0, dot) : fileName;
+    }
+
+    /**
+     * Returns the file extension (without the dot).
+     *
+     * @return the extension, or "" if none
+     */
+    @Contract(pure = true)
+    public String getExtension() {
+        String fileName = getFileName();
+        int dot = fileName.lastIndexOf('.');
+        return dot >= 0 ? fileName.substring(dot + 1) : "";
+    }
+
+    // ========== Paths ==========
+
+    /**
+     * Returns the normalized path (without leading slash).
+     *
+     * @return the resource path
+     */
+    @Contract(pure = true)
+    public String getResourcePath() {
+        return path;
+    }
+
+    /**
+     * Returns the path with leading slash.
+     *
+     * @return the path prefixed with "/"
+     */
+    @Contract(pure = true)
+    public String getResourcePathWithSlash() {
+        return "/" + path;
+    }
+
+    /**
+     * Returns the parent directory path.
+     *
+     * @return the parent path, or "" if at root
+     */
+    @Contract(pure = true)
+    public String getParentResourcePath() {
+        int lastSlash = path.lastIndexOf('/');
+        return lastSlash >= 0 ? path.substring(0, lastSlash) : "";
+    }
+
+    @Override
+    public String toString() {
+        return toExternalForm();
     }
 }

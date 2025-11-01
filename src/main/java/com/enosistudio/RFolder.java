@@ -2,112 +2,102 @@ package com.enosistudio;
 
 import org.jetbrains.annotations.Contract;
 
-import java.io.IOException;
-import java.net.URISyntaxException;
 import java.net.URL;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
 /**
- * Base class for resource folders with utility methods for managing resource directory paths.
- * Provides consistent path handling for resource folders in both JAR and filesystem environments.
- *
- * <p><b>JAR vs Filesystem compatibility:</b></p>
- * <ul>
- *   <li><b>Always work:</b> {@link #getName()}, {@link #getResourcePath()}, {@link #getAbsoluteURL()}, {@link #getAbsolutePath()}, {@link #exists()}</li>
- * </ul>
+ * Simple wrapper for resource folders.
+ * Provides consistent path handling for resource directories in both JAR and filesystem environments.
  */
+@SuppressWarnings("unused")
 public class RFolder {
-    protected final String folderName;
-    protected final String folderPath;
+    private final String path;
+    private final ClassLoader loader;
 
     /**
-     * Creates a new RFolder instance with the specified folder name and path.
+     * Creates a new RFolder instance with the specified folder path.
      *
-     * @param folderName the name of the folder
-     * @param folderPath the complete path to the folder
-     * @throws IllegalArgumentException if folderName or folderPath is null or empty
+     * @param folderPath the complete path to the folder (leading slash optional)
+     * @throws IllegalArgumentException if folderPath is null or empty
      */
-    protected RFolder(String folderName, String folderPath) {
-        if (folderName == null || folderName.trim().isEmpty()) {
-            throw new IllegalArgumentException("Folder name cannot be null or empty");
-        }
+    protected RFolder(String folderPath) {
         if (folderPath == null || folderPath.trim().isEmpty()) {
             throw new IllegalArgumentException("Folder path cannot be null or empty");
         }
 
-        this.folderName = folderName;
-        this.folderPath = folderPath;
+        this.path = folderPath.startsWith("/") ? folderPath.substring(1) : folderPath;
+        this.loader = getClass().getClassLoader();
     }
 
-    /**
-     * Gets the folder name.
-     *
-     * @return the folder name
-     */
-    @Contract(pure = true)
-    public String getName() {
-        return folderName;
-    }
+    // ========== Metadata ==========
 
     /**
-     * Gets the resource path (relative to classpath root).
+     * Returns the absolute URL for this folder.
      *
-     * @return the resource path (e.g., "assets/images")
+     * @return the URL
      */
     @Contract(pure = true)
-    public String getResourcePath() {
-        return folderPath;
-    }
-
-    /**
-     * Gets the absolute URL for this folder from the classpath.
-     *
-     * @return the absolute folder URL, or {@code null} if folder doesn't exist
-     */
-    @Contract(pure = true)
-    public URL getAbsoluteURL() {
-        String normalizedPath = folderPath.startsWith("/") ? folderPath.substring(1) : folderPath;
-        return getClass().getClassLoader().getResource(normalizedPath);
-    }
-
-    /**
-     * Gets the absolute path for this folder.
-     *
-     * @return an absolute Path object (supports both filesystem and JAR resources)
-     * @throws IOException if the folder cannot be accessed or path cannot be resolved
-     */
-    @Contract(pure = true)
-    public Path getAbsolutePath() throws IOException {
-        URL url = getAbsoluteURL();
-        if (url == null) {
-            throw new IOException("Resource folder not found: " + folderPath);
-        }
-
-        try {
-            return Paths.get(url.toURI());
-        } catch (URISyntaxException e) {
-            throw new IOException("Invalid resource folder URL: " + url, e);
-        }
+    public URL getURL() {
+        return loader.getResource(path);
     }
 
     /**
      * Checks if the resource folder exists.
      *
-     * @return {@code true} if the folder exists, {@code false} otherwise
+     * @return true if it exists
      */
     @Contract(pure = true)
     public boolean exists() {
-        return getAbsoluteURL() != null;
+        return getURL() != null;
     }
 
+    // ========== Name Parsing ==========
+
     /**
-     * Returns the resource path as string.
+     * Returns the folder name (last part of the path).
+     *
+     * @return the folder name
+     */
+    @Contract(pure = true)
+    public String getFolderName() {
+        int lastSlash = path.lastIndexOf('/');
+        return lastSlash >= 0 ? path.substring(lastSlash + 1) : path;
+    }
+
+    // ========== Paths ==========
+
+    /**
+     * Returns the normalized path (without leading slash).
      *
      * @return the resource path
      */
+    @Contract(pure = true)
+    public String getResourcePath() {
+        return path;
+    }
+
+    /**
+     * Returns the path with leading slash.
+     *
+     * @return the path prefixed with "/"
+     */
+    @Contract(pure = true)
+    public String getResourcePathWithSlash() {
+        return "/" + path;
+    }
+
+    /**
+     * Returns the parent directory path.
+     *
+     * @return the parent path, or "" if at root
+     */
+    @Contract(pure = true)
+    public String getParentResourcePath() {
+        int lastSlash = path.lastIndexOf('/');
+        return lastSlash >= 0 ? path.substring(0, lastSlash) : "";
+    }
+
     @Override
     public String toString() {
-        return folderPath;
+        return path;
     }
 }

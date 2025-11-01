@@ -55,6 +55,7 @@ public class GenerateRMojo extends AbstractMojo {
 
     /**
      * Executes the Mojo to generate the R.java file.
+     *
      * @throws MojoExecutionException if an error occurs during generation
      */
     public void execute() throws MojoExecutionException {
@@ -78,6 +79,7 @@ public class GenerateRMojo extends AbstractMojo {
 
     /**
      * Generates the R.java class with hierarchical structure based on the resources' directory.
+     *
      * @param outputDir the directory to write the R.java file to
      * @throws IOException if an I/O error occurs
      */
@@ -90,8 +92,9 @@ public class GenerateRMojo extends AbstractMojo {
 
     /**
      * Generates the main R.java class with hierarchical structure.
+     *
      * @param outputDir the directory to write the R.java file to
-     * @param rootNode the root ResourceNode representing the resources
+     * @param rootNode  the root ResourceNode representing the resources
      * @throws IOException if an I/O error occurs
      */
     private void generateMainRClass(File outputDir, ResourceNode rootNode) throws IOException {
@@ -131,8 +134,9 @@ public class GenerateRMojo extends AbstractMojo {
 
     /**
      * Recursively generates fields and nested classes for a ResourceNode.
+     *
      * @param writer the FileWriter to write the class content to
-     * @param node the current ResourceNode
+     * @param node   the current ResourceNode
      * @param indent current indentation level
      * @throws IOException if an I/O error occurs
      */
@@ -153,8 +157,8 @@ public class GenerateRMojo extends AbstractMojo {
                     %s
                     %spublic static final class %s extends RFolder {
                     %s    public static final RFolder _self = new %s();
-                    %s    private %s() { super("%s", "%s"); }
-                    """, indent, indent, className, indent, className, indent, className, folderName, childNode.path));
+                    %s    private %s() { super("%s"); }
+                    """, indent, indent, className, indent, className, indent, className, childNode.path));
 
             // Generate nested content (files and subfolders)
             generateNodeFields(writer, childNode, indent + "    ");
@@ -166,6 +170,7 @@ public class GenerateRMojo extends AbstractMojo {
 
     /**
      * Reads the content of a class file from the plugin's resources.
+     *
      * @param fileName the name of the class file to read
      * @return the content of the class file as a string, or null if not found
      */
@@ -184,9 +189,10 @@ public class GenerateRMojo extends AbstractMojo {
 
     /**
      * Converts a standalone class content to an inner class format.
+     *
      * @param classContent the full content of the class
-     * @param className the name of the class to convert
-     * @param isFinal whether the class should be final
+     * @param className    the name of the class to convert
+     * @param isFinal      whether the class should be final
      * @return the converted inner class content
      */
     private String convertToInnerClass(String classContent, String className, boolean isFinal) {
@@ -217,6 +223,7 @@ public class GenerateRMojo extends AbstractMojo {
 
     /**
      * Builds a tree representation of the resources' directory.
+     *
      * @return the root ResourceNode
      */
     private ResourceNode buildResourceTree() {
@@ -227,7 +234,8 @@ public class GenerateRMojo extends AbstractMojo {
 
     /**
      * Recursively scans the resources directory and builds a tree of ResourceNode and ResourceFile.
-     * @param dir current directory to scan
+     *
+     * @param dir         current directory to scan
      * @param currentPath relative path from resources root
      * @param currentNode current ResourceNode to populate
      */
@@ -257,6 +265,7 @@ public class GenerateRMojo extends AbstractMojo {
     /**
      * Converts a string to a valid Java variable name by replacing invalid characters with underscores
      * and converting to camelCase.
+     *
      * @param name the original name
      * @return a valid Java variable name
      */
@@ -280,6 +289,7 @@ public class GenerateRMojo extends AbstractMojo {
     /**
      * Converts a string to a valid Java class name by replacing invalid characters with underscores
      * and converting to PascalCase.
+     *
      * @param name the original name
      * @return a valid Java class name
      */
@@ -302,10 +312,11 @@ public class GenerateRMojo extends AbstractMojo {
 
     /**
      * Represents a node in the resource tree, which can be a folder containing files and subfolders.
-     * @param name the folder name
-     * @param path the relative path from resources root
+     *
+     * @param name     the folder name
+     * @param path     the relative path from resources root
      * @param children map of child folder names to their ResourceNode
-     * @param files list of ResourceFile objects in this folder
+     * @param files    list of ResourceFile objects in this folder
      */
     private record ResourceNode(String name, String path, Map<String, ResourceNode> children,
                                 List<ResourceFile> files) {
@@ -316,6 +327,7 @@ public class GenerateRMojo extends AbstractMojo {
 
     /**
      * Represents a resource file with name and path.
+     *
      * @param name the file name
      * @param path the relative path from resources root
      */
